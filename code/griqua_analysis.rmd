@@ -1,0 +1,390 @@
+---
+title: "Griqua Cluster Spatial Analysis, MSc Diss 2020"
+author: "Amy Hatton, UCL"
+date: "29/09/2020"
+output: html_document
+---
+Set the root of project folder as directory
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+opts_knit$set(root.dir=rprojroot::find_rstudio_root_file())
+```
+Load libraries
+```{r, include=FALSE}
+library(spatstat)
+library(raster)
+library(maptools)
+library(rgdal)
+library(sf)
+library(viridisLite)
+library(tmap)
+library(tidyverse)
+library(tmaptools)
+library(here)
+library(sp)
+
+#hartebeestheok peojection
+lo23 <- CRS(
+  "+proj=tmerc +lat_0=0 +lon_0=23 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
+#Lat long projection
+wgs84_latlong <- st_crs(4326)
+```
+
+## Point pattern analysis with spatstat:
+Get data and
+Create a multitype pattern
+
+```{r}
+sites <- st_transform(st_read("data/griqua/kim_sites.gpkg"), lo23)
+sites$site_type <- as.factor(sites$site_type)
+sites_agecat <- st_transform(st_read("data/griqua/sites_agecat.gpkg"), crs=lo23)
+basin <- st_transform(st_read("data/griqua/basins_final.gpkg", layer="boundary"), lo23)
+sites_agecat$age_cat <- as.factor(sites_agecat$age_cat)
+kim_sites_ages <- st_intersection(sites_agecat, basin)
+kim_sites_ages$site_type <- as.factor(kim_sites_ages$site_type)
+
+basin_sp <- as(basin, "Spatial")
+
+#split age cats
+young1 <- kim_sites_ages %>% 
+  filter(age_cat == "agecat_1"|age_cat == "agecat_2")
+mid1 <- kim_sites_ages %>% 
+  filter(age_cat == "agecat_3"|age_cat == "agecat_4")
+old1 <- kim_sites_ages %>% 
+  filter(age_cat == "agecat_5")
+
+#set basin boundary as window for analysis
+basin_owin <- as.owin(basin_sp)
+
+#convert to sp and the to ppp object
+sites_sp <- as(sites, "Spatial")
+sahris_sites_sp <- as(sahris_sites, "Spatial")
+young <- as(young1, "Spatial")
+mid <- as(mid1, "Spatial")
+old <- as(old1, "Spatial")
+library(spbabel)
+
+
+y.coords <- coordinates(young)
+m.coords <- coordinates(mid)
+o.coords <- coordinates(old)
+
+y_ppp <- ppp(x=y.coords[,1], y=y.coords[,2], window = basin_owin)
+m_ppp <- ppp(x=m.coords[,1], y=m.coords[,2], window = basin_owin)
+o_ppp<- ppp(x=o.coords[,1], y=o.coords[,2], window = basin_owin)
+#with marks
+y.ppp <- ppp(x=y.coords[,1], y=y.coords[,2], window = basin_owin, marks=young$site_type)
+m.ppp <- ppp(x=m.coords[,1], y=m.coords[,2], window = basin_owin, marks=mid$site_type)
+o.ppp<- ppp(x=o.coords[,1], y=o.coords[,2], window = basin_owin, marks=old$site_type)
+coords_temp <- spbabel::sptable(sites_sp)
+caves_ppp <- as.ppp(coordinates(sites_sp[sites_sp$site_type=="cave"|sites_sp$site_type=="rockshelter",]),
+                    as.owin(basin_owin))
+open_ppp <- as.ppp(coordinates(sites_sp[sites_sp$site_type=="open-air",]),
+                   as.owin(basin_owin))
+all_ppp <- as.ppp(coordinates(sites_sp), as.owin(basin_owin))
+```
+
+### Kernel Density Estimation
+
+First calculate the mean nearest neighbour distance multiplied by 3, to determine the kernel bandwidth:
+
+Attempt two 
+
+-   old (800-2800ka)= 63114m   
+-   middle (130-800ka)= 6603m
+-   young (10-130)= 8162m
+
+
+```{r}
+
+#for (i in list){nndc <- nndist(
+ # i, by=marks(i))
+#print(mean(nndc))}
+nndc <- nndist(caves_ppp, by=marks(caves_ppp))
+mean(nndc)
+nndc <- nndist(open_ppp, by=marks(open_ppp))
+mean(nndc)
+nndc <- nndist(sahris_ppp, by=marks(sahris_ppp))
+mean(nndc)
+nndc <- nndist(y_ppp, by=marks(y_ppp))
+mean(nndc)
+nndc <- nndist(m_ppp, by=marks(m_ppp))
+mean(nndc)
+nndc <- nndist(o_ppp, by=marks(o_ppp))
+mean(nndc)
+
+#attempt two
+nndc <- nndist(o.ppp)
+mean(nndc)
+
+
+nnd_list <- c(3322, 3533,3590,63114, 6603, 8162)
+nnd_list*3
+
+
+```
+Empirical distances:
+9966  10599  10770 189342  19809  24486
+Need to figure out how to do this in a better way (loop through list)
+
+```{r}
+
+# Overall density of all points in our data
+#list <- c(caves_ppp, open_ppp, sahris_ppp, a1_2_ppp, a3_4_ppp, a5_ppp)
+
+#ppp_list <- as.solist(list, demote=TRUE)
+#for(i in list) {density.ppp(list[i], sigma=3000)}
+
+d.cave.1 <- density.ppp(caves_ppp, sigma = 3000)
+d.cave.2 <- density.ppp(caves_ppp, sigma = 9966)
+d.cave.3 <- density.ppp(caves_ppp, sigma = 40000)
+d.open.1 <- density.ppp(open_ppp, sigma = 3000)
+d.open.2 <- density.ppp(open_ppp, sigma = 10599)
+d.open.3 <- density.ppp(open_ppp, sigma = 40000)
+
+  
+d.old1 <- density.ppp(o_ppp, sigma = 3000)
+d.old2 <- density.ppp(o_ppp, sigma = 20000)
+d.old3 <- density.ppp(o_ppp, sigma = 40000)
+
+d.mid1 <- density.ppp(m_ppp, sigma = 3000)
+d.mid2 <- density.ppp(m_ppp, sigma = 19809)
+d.mid3 <- density.ppp(m_ppp, sigma = 40000)
+
+d.young1 <- density.ppp(y_ppp, sigma = 3000)
+d.young2 <- density.ppp(y_ppp, sigma = 24486)
+d.young3 <- density.ppp(y_ppp, sigma = 40000)
+```
+
+
+#### Plot kernel density estimates
+
+Density of all cave sites is mostly in northern edge, while density of hominin cave sites is in southern edge why??
+
+```{r, fig.width= '33%'}
+
+pdf("figs/kimberley_chp/KDE.pdf", width = 7.5, height =12.5)
+par(mfrow = c(5,3), mar = c(0.7, 0.4, 0.7, 1.2))#bottom, left, top, and right
+#threshold = 1000m
+plot(d.cave.1, main = "Cave Sites, small kernel") # Plot interpolated values
+plot(as.ppp(caves_ppp), add = TRUE, cex = 1, pch =1)
+plot(d.cave.2, main = "Cave Sites, empirical kernel") 
+plot(as.ppp(caves_ppp), add = TRUE, cex = 1, pch =1)
+plot(d.cave.3, main = "Cave Sites, large kernel") # Plot interpolated values
+plot(as.ppp(caves_ppp), add = TRUE, cex = 1, pch =1)
+
+plot(d.open.1, main = "Open-air Sites, small kernel") 
+plot(as.ppp(open_ppp), add = TRUE, cex = 1, pch =2)
+
+plot(d.open.2, main = "Open-air Sites, empirical kernel") 
+plot(as.ppp(open_ppp), add = TRUE, cex = 1, pch =2)
+
+plot(d.open.3, main = "Open-air Sites, large kernel") # Plot interpolated values
+plot(as.ppp(open_ppp), add = TRUE, cex = 1, pch =2)
+
+plot(d.young1, main = "Sites 10-130ka, small kernel") # Plot interpolated values
+plot(as.ppp(y.ppp), add = TRUE, cex = 1, pch =c(1,2))
+plot(d.young2, main = "Sites 10-130ka, empirical kernel") 
+plot(as.ppp(y.ppp), add = TRUE, cex = 1, pch =c(1,2))
+plot(d.young3, main = "Sites 10-130ka, large kernel") # Plot interpolated values
+plot(as.ppp(y.ppp), add = TRUE, cex = 1, pch =c(1,2))
+
+plot(d.mid1, main = "Sites 130-800ka, small kernel") 
+plot(as.ppp(m.ppp), add = TRUE, cex = 1, pch =c(1,2))
+plot(d.mid2, main = "Sites 130-800ka, empirical kernel") 
+plot(as.ppp(m.ppp), add = TRUE, cex = 1, pch =c(1,2))
+plot(d.mid3, main = "Sites 130-800ka, large kernel") # Plot interpolated values
+plot(as.ppp(m.ppp), add = TRUE, cex = 1, pch =c(1,2))
+
+plot(d.old1, main = "Sites 800-2800ka, small kernel") # Plot interpolated values
+plot(as.ppp(o.ppp), add = TRUE, cex = 1, pch =c(1,2))
+plot(d.old2, main = "Sites 800-2800ka, empirical kernel") # Plot interpolated values
+plot(as.ppp(o.ppp), add = TRUE, cex = 1, pch =c(1,2))
+plot(d.old3, main = "Sites 800-2800ka, large kernel") # Plot interpolated values
+plot(as.ppp(o.ppp), add = TRUE, cex = 1, pch =c(1,2))
+
+dev.off()
+```
+
+## Distance Based Approaches
+
+
+### Covariates (environmental variables)
+
+look at the effect of variables on the location of sites
+
+Variables to test :
+
+-    Elevation
+
+-   deviation from north
+
+-   topographic position index
+
+-   terrain ruggedness index
+
+-   distance from streams (large and small threshold)
+
+-   distance from dolomite - geology type ? (or dist from quarternary seds)
+
+-   distance to watershed boundaries -
+
+-   positive openess (viewshed)
+
+```{r}
+dem <- raster("data/griqua/kim_dem_exact.tif")
+grids <- list.files(path="data/griqua/covariates/", pattern = "*.tif$")
+rs <- raster::stack(paste0("data/griqua/covariates/", grids))
+
+library(tools)
+names <- file_path_sans_ext(list.files("data/griqua/covariates/"))
+names(rs) <- c(names)
+```
+
+
+## Create im objects
+
+```{r}
+library(maptools)
+vars <- list(as.im(as(rs[[1]], "SpatialGridDataFrame")),
+             as.im(as(rs[[2]], "SpatialGridDataFrame")),
+             as.im(as(rs[[3]], "SpatialGridDataFrame")),
+             as.im(as(rs[[4]], "SpatialGridDataFrame")),
+             as.im(as(rs[[5]], "SpatialGridDataFrame")),
+             as.im(as(rs[[6]], "SpatialGridDataFrame")))
+
+names(vars) <- c(names)
+```
+## Exploring relationship between covariates and intensity (using all sites point pattern)
+
+```{r}
+rh_cal <- rhohat(all_ppp, vars[[1]], confidence = 0.95)
+rh_dol <- rhohat(all_ppp, vars[[2]], confidence = 0.95)
+rh_streams <- rhohat(all_ppp, vars[[3]], confidence = 0.95)
+rh_dem <- rhohat(all_ppp, vars[[4]], confidence = 0.95)
+rh_ndev <- rhohat(all_ppp, vars[[5]], confidence = 0.95)
+rh_tpi <- rhohat(all_ppp, vars[[6]], confidence = 0.95)
+rh_tri <- rhohat(all_ppp, vars[[7]], confidence = 0.95)
+```
+
+
+Plot rhohat plots
+```{r}
+library(RColorBrewer)
+pdf("figs/griqua/rhohat_plots_short.pdf", width =15, height = 8)
+par(mfrow=c(3,4))
+par(mar=c(4.1,4.1,3.1,2.1))
+plot(rh_cal, main = "", xlab="Distance to calcrete m)",xlim=c(0,34620), legend=FALSE)
+
+par(mar=c(2.1,2.1,2.1,5.1))
+plot(rs[[1]], main="Distance to calcrete (m)", col=inferno(10), axes=FALSE, box=FALSE)
+#p3 <- recordPlot()
+
+par(mar=c(4.1,4.1,3.1,2.1))
+plot(rh_dol, main = "", xlab="Distance to dolomite (m)",xlim=c(0, 119659), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,5.1))
+plot(rs[[2]], main="Distance to dolomite (m)", col=inferno(10), axes=FALSE, box=FALSE)
+
+
+par(mar=c(4.1,4.1,3.1,2.1))
+plot(rh_streams, main = "",
+     xlab="Distance to streams (m)", xlim=c(0,60977), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,5.1))
+plot(rs[[3]], main="Distance to streams (m)", col=inferno(10), axes=FALSE, box=FALSE)
+
+par(mar=c(4.1,4.1,3.1,2.1))
+plot(rh_dem, main = "",
+     xlab="Elevation (m)", xlim=c(998, 1860), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,5.1))
+plot(rs[[4]], main="Elevation (m)", col=viridis(12), axes=FALSE, box=FALSE)
+
+par(mar=c(4.1,4.1,3.1,2.1))
+plot(rh_tpi, main = "", xlab="Terrain Position Index", xlim=c(-40,39), legend=FALSE)
+#make a diverging colour pallette for TPI
+cols <- brewer.pal(3, "PRGn")
+pal <- colorRampPalette(cols)
+par(mar=c(2.1,2.1,2.1,5.1))
+plot(rs[[6]], main="TPI", col=pal(12), axes=FALSE, box=FALSE)
+
+
+par(mar=c(4.1,4.1,3.1,2.1))
+plot(rh_tri, main = "", xlab="Terrain Ruggedness Index", xlim=c(0,64), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,5.1))
+plot(rs[[7]], main="TRI", col=, axes=FALSE, box=FALSE)
+
+dev.off()
+```
+
+```{r}
+library(spatstat)
+```
+
+## Model fitting
+
+Check for collinearity
+
+Had to remove slope because it was intercorrelated 
+
+```{r}
+library(virtualspecies)
+removeCollinearity(rs, multicollinearity.cutoff = 0.75,
+                   select.variables = FALSE, sample.points = TRUE, nb.points = 100000,
+                   plot = TRUE) # No collinear variables
+```
+### First order model all sites
+```{r}
+ktrend <- ~ d_cal + d_dol + d_streams + kim_dem_exact + tpi + tri
+
+fit_all <- step(ppm(all_ppp, trend = ktrend, covariates=vars, correction = "iso", method="logi"), k=log(5))
+
+summary(fit_all)
+
+```
+#### First order models for each group of sites
+
+
+### Model Testing 
+
+## All sites
+### Null
+```{r}
+na <- envelope(all_ppp, fun = pcfinhom, correction="iso",
+                    divisor="d", nsim = 999, fix.n=TRUE)
+```
+### First order
+```{r}
+fa <- envelope(fit_all, fun = pcfinhom, nsim = 999, correction = "iso", divisor = "d", fix.n=TRUE)
+```
+### Prediction map
+```{r}
+logodds_all <- raster(-20.05716
+ +(vars[[1]]*-0.00010)+(vars[[2]]*-0.00001)+(vars[[4]]*-0.00081)+(vars[[5]]*-0.04737
+)+(vars[[6]]*0.25147), crs=lo23)
+```
+
+
+
+### Plotting the model testing 
+
+####All sites
+
+
+### Plot the PCF 
+#### Null
+
+#### First order based on pattern of all caves
+```{r}
+pdf("figs/griqua/fitted_models_first_order_all.pdf", width =2.5, height =12)
+par(mfrow = c(5,1))
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(fa1, legend=FALSE,main="", lwd=1.5, ylim=c(0,15))
+plot(fa2, legend=FALSE,main="",  lwd=1.5, ylim=c(0,12))
+plot(fa3, legend=FALSE,main="",  lwd=1.5, ylim=c(0,20))
+plot(fa4, legend=FALSE,main="" , lwd=1.5, ylim=c(0,15))
+plot(fa5, legend=FALSE,main="",  lwd=1.5, ylim=c(0,1))
+
+dev.off()
+```
+
+

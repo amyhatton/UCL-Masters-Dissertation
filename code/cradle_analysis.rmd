@@ -111,7 +111,7 @@ hominin cave sites is in southern edge
 
 ```{r, fig.width= '33%'}
 
-png("figs/cradle/KDE.png", width = 1300, height = 1200, res =150)
+pdf("figs/cradle/KDE.pdf", width = 7.5, height =10)
 par(mfrow = c(3,3), mar = c(0.7, 0.4, 1, 1.2))#bottom, left, top, and right
 #threshold = 1000m
 plot(d.all_caves.1, main = "All cave sites") # Plot interpolated values
@@ -326,9 +326,6 @@ dev.off()
 ```
 
 ```{r}
-library(RColorBrewer)
-dpi=300
-
 #Lithological boundaries
 pdf("figs/cradle/rhohat_plots1.pdf", width =8, height = 12)
 par(mfrow=c(3,3))
@@ -347,7 +344,7 @@ plot(rs$dist_dykes, main="Distance to Dykes", col=inferno(10), axes=FALSE, box=F
 #faults
 par(mar=c(4.1,3.11,3.1,2.1))
 plot(rh_faults, main = "All Caves", xlab="Distance to faults", xlim=c(0,8000), legend=FALSE)
-plot(rh_faults_hom, main = "Hominin Caves", xlab="Distance to faults", xlim=c(0,8000), legend=FALSE)
+plot(rh_fauts_hom, main = "Hominin Caves", xlab="Distance to faults", xlim=c(0,8000), legend=FALSE)
 par(mar=c(2.1,2.1,2.1,2.1))
 plot(rs$dist_faults, main="Distance to Faults", col=, axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
 
@@ -469,7 +466,7 @@ logodds_hom <- raster( -0.241866676 + (vars[[1]]*-0.010860565)+(vars[[3]]*0.0955
 ### PCF inhomogenous based on models
 
 ```{r}
-pdf("figs/cradle/fitted_models_with_macro.pdf", width =7, height =11)
+pdf("figs/cradle/fitted_models.pdf", width =7, height =11)
 par(mfrow=c(3,3))
 
 par(mar=c(5.1,5.1,5.1,2.1))

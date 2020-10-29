@@ -45,20 +45,19 @@ kim_sites_ages$site_type <- as.factor(kim_sites_ages$site_type)
 basin_sp <- as(basin, "Spatial")
 #split age cats
 young1 <- kim_sites_ages %>% 
-  filter(age_cat == "agecat_1"|age_cat == "agecat_2")
+  filter(age_cat == "agecat_1")
 mid1 <- kim_sites_ages %>% 
-  filter(age_cat == "agecat_3"|age_cat == "agecat_4")
+  filter(age_cat == "agecat_2")
 old1 <- kim_sites_ages %>% 
-  filter(age_cat == "agecat_5")
+  filter(age_cat == "agecat_3")
 #set basin boundary as window for analysis
 basin_owin <- as.owin(basin_sp)
 #convert to sp and the to ppp object
 sites_sp <- as(sites, "Spatial")
-sahris_sites_sp <- as(sahris_sites, "Spatial")
 young <- as(young1, "Spatial")
 mid <- as(mid1, "Spatial")
 old <- as(old1, "Spatial")
-library(spbabel)
+
 y.coords <- coordinates(young)
 m.coords <- coordinates(mid)
 o.coords <- coordinates(old)
@@ -198,17 +197,23 @@ Variables to test :
 
 -   distance from streams (large and small threshold)
 
--   distance from dolomite - geology type ? (or dist from quarternary seds)
+-   distance from dolomite - geology type 
 
--   distance to watershed boundaries -
 
--   positive openess (viewshed)
 
 ```{r}
 dem <- raster("data/griqua/kim_dem_exact.tif")
 
 ```
+### Covariate data
 
+```{r}
+grids <- list.files(path="data/griqua/covariates/", pattern = "*.tif$")
+rs <- raster::stack(paste0("data/griqua/covariates/", grids))
+library(tools)
+names <- file_path_sans_ext(list.files("data/griqua/covariates/"))
+names(rs) <- c(names)
+```
 
 ## Create im objects
 
@@ -229,7 +234,6 @@ rh_cal <- rhohat(all_ppp, vars[[1]], confidence = 0.95)
 rh_dol <- rhohat(all_ppp, vars[[2]], confidence = 0.95)
 rh_streams <- rhohat(all_ppp, vars[[3]], confidence = 0.95)
 rh_dem <- rhohat(all_ppp, vars[[4]], confidence = 0.95)
-rh_ndev <- rhohat(all_ppp, vars[[5]], confidence = 0.95)
 rh_tpi <- rhohat(all_ppp, vars[[6]], confidence = 0.95)
 rh_tri <- rhohat(all_ppp, vars[[7]], confidence = 0.95)
 ```
@@ -238,7 +242,7 @@ rh_tri <- rhohat(all_ppp, vars[[7]], confidence = 0.95)
 Plot rhohat plots
 ```{r}
 library(RColorBrewer)
-pdf("figs/griqua/rhohat_plots_short.pdf", width =15, height = 8)
+pdf("figs/griqua/rhohat_plots.pdf", width =15, height = 8)
 par(mfrow=c(3,4))
 par(mar=c(4.1,4.1,3.1,2.1))
 plot(rh_cal, main = "", xlab="Distance to calcrete m)",xlim=c(0,34620), legend=FALSE)
@@ -329,13 +333,12 @@ logodds_all <- raster(-20.05716
 
 #### First order based on pattern of all caves
 ```{r}
-pdf("figs/griqua/fitted_models_first_order_all.pdf", width =2.5, height =12)
-par(mfrow = c(5,1))
+pdf("figs/griqua/fitted_models_all_sites.pdf", width =6, height =3)
+par(mfrow = c(1,3))
 par(mar=c(2.1,2.1,2.1,2.1))
-plot(fa1, legend=FALSE,main="", lwd=1.5, ylim=c(0,15))
-plot(fa2, legend=FALSE,main="",  lwd=1.5, ylim=c(0,12))
-plot(fa3, legend=FALSE,main="",  lwd=1.5, ylim=c(0,20))
-plot(fa4, legend=FALSE,main="" , lwd=1.5, ylim=c(0,15))
-plot(fa5, legend=FALSE,main="",  lwd=1.5, ylim=c(0,1))
+plot(na, legend=FALSE,main="Null", lwd=1.5, ylim=c(0,15))
+plot(fa, legend=FALSE,main="First Order",  lwd=1.5, ylim=c(0,12))
+plot(logodds_all, main="Predicted intensity",  lwd=1.5, ylim=c(0,20))
+
 dev.off()
 ```

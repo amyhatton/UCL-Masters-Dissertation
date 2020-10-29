@@ -111,7 +111,7 @@ hominin cave sites is in southern edge
 
 ```{r, fig.width= '33%'}
 
-png("figs/coh_chp/KDE.png", width = 1300, height = 1200, res =150)
+png("figs/cradle/KDE.png", width = 1300, height = 1200, res =150)
 par(mfrow = c(3,3), mar = c(0.7, 0.4, 1, 1.2))#bottom, left, top, and right
 #threshold = 1000m
 plot(d.all_caves.1, main = "All cave sites") # Plot interpolated values
@@ -153,7 +153,7 @@ Visualise:
 Fry plots:
 
 ```{r, fig.show="hold", fig.width='33%'}
-png("figs/coh_chp/fry_plot.png", width = 1300,
+png("figs/cradle/fry_plot.png", width = 1300,
     height = 400, res =150)
 par(mfrow = c(1,3), mar = c(0.7, 0.4, 0.7, 0.7))
 
@@ -168,7 +168,7 @@ Rose Diagrams
 calculate a pairorient() which is the probability distribution of angles
 
 ```{r, fig.show='hold', fig.width='33%'}
-png("figs/coh_chp/rose_plot.png", width = 1300,
+png("figs/cradle/rose_plot.png", width = 1300,
     height = 400, res =150)
 par(mfrow = c(1,3), mar = c(0.7, 0.4, 0.7, 0.7))
 
@@ -287,7 +287,7 @@ library(RColorBrewer)
 dpi=300
 
 #elevation
-pdf("figs/rhohat_plots.pdf", width =8, height = 14)
+pdf("figs/cradle/rhohat_plots.pdf", width =8, height = 14)
 par(mfrow=c(4,3))
 par(mar=c(4.1,3.1,3.1,2.1))
 plot(rh_dem, main = "All Caves", xlab="Elevation (m)",xlim=c(1200,1700), legend=FALSE)
@@ -330,7 +330,7 @@ library(RColorBrewer)
 dpi=300
 
 #Lithological boundaries
-pdf("figs/rhohat_plots1.pdf", width =8, height = 12)
+pdf("figs/cradle/rhohat_plots1.pdf", width =8, height = 12)
 par(mfrow=c(3,3))
 par(mar=c(4.1,3.1,3.1,2.1))
 plot(rh_lith, main = "All Caves", xlab="Distance to Lithological boundaries (m)",xlim=c(0,3000), legend=FALSE)
@@ -469,7 +469,7 @@ logodds_hom <- raster( -0.241866676 + (vars[[1]]*-0.010860565)+(vars[[3]]*0.0955
 ### PCF inhomogenous based on models
 
 ```{r}
-pdf("figs/coh_chp/fitted_models_with_macro.pdf", width =7, height =11)
+pdf("figs/cradle/fitted_models_with_macro.pdf", width =7, height =11)
 par(mfrow=c(3,3))
 
 par(mar=c(5.1,5.1,5.1,2.1))

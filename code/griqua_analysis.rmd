@@ -206,11 +206,7 @@ Variables to test :
 
 ```{r}
 dem <- raster("data/griqua/kim_dem_exact.tif")
-grids <- list.files(path="data/griqua/covariates/", pattern = "*.tif$")
-rs <- raster::stack(paste0("data/griqua/covariates/", grids))
-library(tools)
-names <- file_path_sans_ext(list.files("data/griqua/covariates/"))
-names(rs) <- c(names)
+
 ```
 
 

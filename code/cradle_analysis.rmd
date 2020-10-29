@@ -1,0 +1,497 @@
+---
+title: "Cradle Analysis, MSc Diss"
+author: "Amy Hatton, UCL"
+date: "26/07/2020"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+Setup and install libraries
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+opts_knit$set(root.dir=rprojroot::find_rstudio_root_file())
+
+library(spatstat)
+library(raster)
+library(maptools)
+library(rgdal)
+library(sf)
+library(viridisLite)
+library(tmap)
+library(tidyverse)
+library(tmaptools)
+library(here)
+library(sp)
+
+#set up the south african projection system
+rsa_grid <- CRS(
+  "+proj=tmerc +lat_0=0 +lon_0=27 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
+wgs84_latlong <- st_crs(4326)
+
+```
+
+## Point pattern analysis with spatstat:
+
+Create a multitype pattern
+
+```{r}
+sites_analysis <- st_read("data/cradle/sites_analysis.gpkg")
+sites_analysis$site_category <- as.factor(sites_analysis$site_category)
+
+#set intersection of malmani dolomite and cradle as owin
+coh_malmani <- st_transform(st_read("data/cradle/obbes_malmani.gpkg"), rsa_grid)
+#set malmani_coh as window for analysis
+malmani_owin <- as.owin(coh_malmani)
+
+#convert to sp and the to ppp object
+caves_sp <- as(sites_analysis, "Spatial")
+library(spbabel)
+coords_temp <- spbabel::sptable(caves_sp)
+caves_ppp <- ppp(x = coords_temp$x_, y= coords_temp$y_,
+                 window = malmani_owin, marks = caves_sp$site_category)
+```
+
+Split according to site category and explore the spatial distribution:
+
+```{r}
+all_caves <- as.ppp(coordinates(
+  caves_sp[caves_sp$site_category=="all_cave", ]),
+  as.owin(malmani_owin))
+
+macro_caves <- as.ppp(coordinates(
+  caves_sp[caves_sp$site_category=="macro_fossil_cave", ]),
+  as.owin(malmani_owin))
+
+hom_caves <- as.ppp(coordinates(
+  caves_sp[caves_sp$site_category=="hominin_cave", ]),
+  as.owin(malmani_owin))
+
+```
+
+### Kernel Density Estimation
+
+First calculate the mean nearest neighbour distance, to determine the
+kernel bandwidth:
+
+all cave mean nnd= 522m macro cave mean nnd= 581m hominin cave mean nnd=
+756m
+
+```{r}
+nndc <- nndist(caves_ppp, by=marks(caves_ppp))
+aggregate(nndc, by=list(from=marks(caves_ppp)), mean)
+nnd_list <- c(756, 581, 522)
+nnd_list*3
+```
+
+Density of sites in the cradle of humankind two main clusters , one in
+the north, one in the south The sites also seem to be aligned along an
+axis that is more north-south than the dolomite
+
+```{r}
+# Overall density of all points in our data
+d.hom.1 <- density.ppp(hom_caves, sigma = 500)
+d.hom.2 <- density.ppp(hom_caves, sigma = 2268)
+d.hom.3 <- density.ppp(hom_caves, sigma = 6000)
+d.macro.1 <- density.ppp(macro_caves, sigma = 500)
+d.macro.2 <- density.ppp(macro_caves, sigma = 1743)
+d.macro.3 <- density.ppp(macro_caves, sigma = 6000)
+d.all_caves.1 <- density.ppp(all_caves, sigma = 500)
+d.all_caves.2 <- density.ppp(all_caves, sigma = 1566)
+d.all_caves.3 <- density.ppp(all_caves, sigma = 6000)
+```
+
+\#\#\#Plot kernel density estimates
+
+Density of all cave sites is mostly in northern edge, while density of
+hominin cave sites is in southern edge
+
+```{r, fig.width= '33%'}
+
+png("figs/coh_chp/KDE.png", width = 1300, height = 1200, res =150)
+par(mfrow = c(3,3), mar = c(0.7, 0.4, 1, 1.2))#bottom, left, top, and right
+#threshold = 1000m
+plot(d.all_caves.1, main = "All cave sites") # Plot interpolated values
+plot(as.ppp(all_caves), add = TRUE, cex = 0.9, pch =1)
+
+plot(d.macro.1, main = "Macro fossil cave sites") 
+plot(as.ppp(macro_caves), add = TRUE, cex = 1, pch =1)
+
+plot(d.hom.1, main = "Hominin cave sites") # Plot interpolated values
+plot(hom_caves, add = TRUE, cex = 1, pch =1)
+par(mar = c(0.4, 0.4, 0.4, 1.2))
+#threshold = 3000m
+plot(d.all_caves.2, main = "") 
+plot(as.ppp(all_caves), add = TRUE, cex = 1, pch =1)
+
+plot(d.macro.2, main = "") 
+plot(as.ppp(macro_caves), add = TRUE, cex = 1, pch =1)
+
+plot(d.hom.2, main = "") # Plot interpolated values
+plot(hom_caves, add = TRUE, cex = 0.8, pch =1)
+
+#threshold = 5000m
+plot(d.all_caves.3, main = "") # Plot interpolated values
+plot(as.ppp(all_caves), add = TRUE, cex = 1, pch =1)
+
+plot(d.macro.3, main = "") # Plot interpolated values
+plot(as.ppp(macro_caves), add = TRUE, cex = 1, pch =1)
+
+plot(d.hom.3, main = "") # Plot interpolated values
+plot(hom_caves, add = TRUE, cex = 1, pch =1)
+
+dev.off()
+```
+
+#### investigating anisotropy (directional layout of point - geological fractures)
+
+Visualise:
+
+Fry plots:
+
+```{r, fig.show="hold", fig.width='33%'}
+png("figs/coh_chp/fry_plot.png", width = 1300,
+    height = 400, res =150)
+par(mfrow = c(1,3), mar = c(0.7, 0.4, 0.7, 0.7))
+
+fryplot(all_caves, cex=0.3, axes=T, main="All caves")
+fryplot(macro_caves, cex=0.3, axes=T, main="Macro caves")
+fryplot(hom_caves, cex=0.3, axes=T, main="Hominin caves")
+dev.off()
+```
+
+Rose Diagrams
+
+calculate a pairorient() which is the probability distribution of angles
+
+```{r, fig.show='hold', fig.width='33%'}
+png("figs/coh_chp/rose_plot.png", width = 1300,
+    height = 400, res =150)
+par(mfrow = c(1,3), mar = c(0.7, 0.4, 0.7, 0.7))
+
+rose_ac <- pairorient(all_caves,r1=500, r2=3000, sigma=4)
+rose(rose_ac,  start=270, clockwise=TRUE, col = "gray", main= "All caves")
+rose_mc <- pairorient(macro_caves,r1=500, r2=3000, sigma=4)
+rose(rose_mc,  start=270, clockwise=TRUE, col = "gray", main= "Macro fossil caves")
+rose_hc <- pairorient(hom_caves,r1=500, r2=3000, sigma=4)
+rose(rose_hc,  start=270, clockwise=TRUE, col = "gray", main= "Hominin fossil caves")
+
+dev.off()
+```
+
+## Investigate the intensity of point for each of the covariates
+
+### Covariate data
+
+```{r}
+grids <- list.files(path="data/cradle/covariates/", pattern = "*.tif$")
+rs <- raster::stack(paste0("data/cradle/covariates/", grids))
+library(tools)
+names <- file_path_sans_ext(list.files("data/cradle/covariates/"))
+names(rs) <- c(names)
+```
+
+Convert to im objects:
+
+```{r}
+dykes.im <- as.im(as(rs$dist_dykes,"SpatialGridDataFrame"))
+faults.im <- as.im(as(rs$dist_faults,"SpatialGridDataFrame"))
+lith.im <-  as.im(as(rs$dist_lith_bound,"SpatialGridDataFrame"))
+streams.im <- as.im(as(rs$dist_streams, "SpatialGridDataFrame"))
+dem.im <- as.im(as(rs$malmani_dem, "SpatialGridDataFrame"))
+tpi.im <- as.im(as(rs$tpi, "SpatialGridDataFrame"))  
+tri.im <- as.im(as(rs$tri, "SpatialGridDataFrame"))
+```
+
+create rhohat plots
+
+```{r}
+rh_dykes <- rhohat(all_caves, dykes.im, confidence = 0.95)
+rh_dykes_hom <- rhohat(hom_caves, dykes.im, confidence = 0.95)
+rh_faults <- rhohat(all_caves, faults.im, confidence = 0.95)
+rh_fauts_hom <- rhohat(hom_caves, faults.im, confidence = 0.95)
+rh_lith <- rhohat(all_caves, lith.im, confidence = 0.95)
+rh_lith_hom <- rhohat(hom_caves, lith.im, confidence = 0.95)
+rh_streams_hom <- rhohat(hom_caves,
+                           streams.im, confidence = 0.95)
+rh_streams <- rhohat(all_caves,
+                       streams.im, confidence = 0.95)
+
+rh_dem <- rhohat(all_caves, dem.im, confidence = 0.95)
+rh_dem_hom <- rhohat(hom_caves, dem.im, confidence = 0.95)
+
+rh_tpi<- rhohat(all_caves, tpi.im, confidence = 0.95)
+rh_tpi_hom <- rhohat(hom_caves, tpi.im, confidence = 0.95)
+
+rh_tri <- rhohat(all_caves, tri.im, confidence = 0.95)
+rh_tri_hom <- rhohat(hom_caves, tri.im, confidence = 0.95)
+```
+
+Density plot for all caves for the covariates: *Elevation:* the
+elevation in the study area is restricted to between 1350 and 1550 masl,
+there are two peaks for the intensity of sites at about 1430m and 1510m
+(does this correspond to the info from Marker and Moon 1969?)
+
+*Heat Load Index:* The intensity of cave sites is fairly stable for all
+ranges of the HLI (0-1), although there is a small peak at about 0.4
+
+*Terrain Ruggedness Index:* The TRI within the study area is very
+constrained and represent a very level terrain surface. Values between
+1-80 are considered a level terrain surface and the values in the study
+area are between 0-70, with cave sites located in the 0-40 range. The
+intensity of sites over this range is consistent - not a good predictor
+of site location
+
+*Distance From Streams (calculated with a threshold of 500):* The
+intensity of sites is consistent for all distances to stream at this
+threshold. - not a good predictor
+
+*Distance From Streams (calculated with a threshold of 50000):* Site
+intensity s highest at closer distance to streams calculated at this
+threshold, with intensity dropping after about 2000m distance from
+streams.
+
+Figure out what ranges to use for the plots (range of values across study area)
+
+```{r}
+#1200 to 1700m
+hist.im(elev.im)
+#0-70
+hist.im(tri.im)
+# 0 -19000
+hist.im(streams.im)
+#0 - 12000
+hist.im(dykes.im)
+```
+
+#### Plots of the covarites to place next to each rhohat plot
+
+Create Hillshade as an underlay
+
+```{r}
+slope <- terrain(rs$malmani_dem, opt="slope", unit="radians",
+                 neighbors = 8)
+aspect <- terrain(rs$malmani_dem, opt="aspect", unit="radians",
+                 neighbors = 8)
+hs <- hillShade(slope, aspect, angle = 45, direction = 315)
+```
+
+
+#### base r rhohat plot maps
+
+```{r}
+library(RColorBrewer)
+dpi=300
+
+#elevation
+pdf("figs/rhohat_plots.pdf", width =8, height = 14)
+par(mfrow=c(4,3))
+par(mar=c(4.1,3.1,3.1,2.1))
+plot(rh_dem, main = "All Caves", xlab="Elevation (m)",xlim=c(1200,1700), legend=FALSE)
+plot(rh_dem_hom, main = "Hominin Caves", xlab="Elevation (m)",xlim=c(1200,1700), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(rs$malmani_dem, main="Elevation", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+#TPI
+par(mar=c(4.1,3.11,3.1,2.1))
+plot(rh_tpi, main = "All Caves", xlab="Topographic Position Index",xlim=c(-6, 6), legend=FALSE)
+plot(rh_tpi_hom, main = "Hominin Caves", xlab="Topographic Position Index",xlim=c(-6,6), legend=FALSE)
+
+#make a diverging colour pallette for TPI
+cols <- brewer.pal(3, "PRGn")
+pal <- colorRampPalette(cols)
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(rs$tpi, main="TPI", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+#TRI
+par(mar=c(4.1,3.11,3.1,2.1))
+plot(rh_tri, main = "All Caves", xlab="Terrain Ruggedness Index", xlim=c(0,15), legend=FALSE)
+plot(rh_tri_hom, main = "Hominin Caves", xlab="Terrain Ruggedness Index", xlim=c(0,15), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(rs$tri, main="TRI", col=, axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+#streams
+par(mar=c(4.1,3.11,3.1,2.1))
+plot(rh_streams, main = "All Caves",
+     xlab="Distance to Streams (m)", xlim=c(0,13000), legend=FALSE)
+plot(rh_streams_hom, main = "Hominin Caves",
+     xlab="Distance to Streams (m)", xlim=c(0,13000), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(rs$dist_streams, main="Distance to Streams", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+dev.off()
+```
+
+```{r}
+library(RColorBrewer)
+dpi=300
+
+#Lithological boundaries
+pdf("figs/rhohat_plots1.pdf", width =8, height = 12)
+par(mfrow=c(3,3))
+par(mar=c(4.1,3.1,3.1,2.1))
+plot(rh_lith, main = "All Caves", xlab="Distance to Lithological boundaries (m)",xlim=c(0,3000), legend=FALSE)
+plot(rh_lith_hom, main = "Hominin Caves", xlab="Distance to Lithological boundaries (m)",xlim=c(0,3000), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(rs$dist_lith_bound, main="Distance to\nLithological boundaries", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+#dykes
+par(mar=c(4.1,3.11,3.1,2.1))
+plot(rh_dykes, main = "All Caves", xlab="Distance to Dykes",xlim=c(0, 6000), legend=FALSE)
+plot(rh_dykes_hom, main = "Hominin Caves", xlab="Distance to Dykes",xlim=c(0,6000), legend=FALSE)
+plot(rs$dist_dykes, main="Distance to Dykes", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+#faults
+par(mar=c(4.1,3.11,3.1,2.1))
+plot(rh_faults, main = "All Caves", xlab="Distance to faults", xlim=c(0,8000), legend=FALSE)
+plot(rh_faults_hom, main = "Hominin Caves", xlab="Distance to faults", xlim=c(0,8000), legend=FALSE)
+par(mar=c(2.1,2.1,2.1,2.1))
+plot(rs$dist_faults, main="Distance to Faults", col=, axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+dev.off()
+```
+
+
+## Analysis: Model fitting
+
+Check for collinearity among the variables
+
+## There is no intercorrelation among variables at 0.75 cutoff
+
+```{r}
+library(virtualspecies)
+removeCollinearity(rs, multicollinearity.cutoff = 0.75,
+                   select.variables = FALSE, sample.points = TRUE,
+                   nb.points = 100000,
+                   plot = TRUE)
+```
+
+```{r}
+#convert to im and stack, remove non-stacked variables
+vars <- list(as.im(as(rs[[1]],"SpatialGridDataFrame")),
+             as.im(as(rs[[2]],"SpatialGridDataFrame")),
+             as.im(as(rs[[3]],"SpatialGridDataFrame")),
+             as.im(as(rs[[4]],"SpatialGridDataFrame")),
+             as.im(as(rs[[5]], "SpatialGridDataFrame")),
+             as.im(as(rs[[6]], "SpatialGridDataFrame")),
+             as.im(as(rs[[7]], "SpatialGridDataFrame"))
+             )
+             
+names(vars) <- c("elev","tpi", "tri", "dist_50000", "dykes", "faults", "lith_bound")
+
+```
+
+### Create a model to describe each of the patterns based on covariates
+
+####First order effects
+
+```{r}
+library(spatstat)
+c_trend <- ~ elev+tpi+ tri+ dist_50000+ dykes+ faults+ lith_bound # Define spatial\
+
+fitc <- step(ppm(all_caves, trend=c_trend, covariates=vars, correction="iso", method="logi"), k=log(5))
+summary(fitc)
+
+```
+
+Univariate model for macro fossil caves: all covariate were kept for
+final
+
+```{r}
+fitm <- step(ppm(macro_caves, trend = c_trend, covariates=vars, correction = "iso", method="logi"), k=log(5))
+
+summary(fitm)
+
+```
+
+Univariate model for hominin fossil caves: Model depends on external
+covariates 'elev', 'hli', 'dist\_500' and 'dist\_50000', Terrain
+Ruggednes was not included.
+
+```{r}
+fith <- step(ppm(hom_caves, trend = c_trend, covariates=vars, correction = "iso", method="logi"), k=log(5))
+
+summary(fith)
+```
+
+First order was able to explain all the variation
+didn't fit a first + second order model
+
+## Analysis: Model testing
+
+# Based on 999 simulations of CSR.
+
+# Null
+
+```{r}
+null <- envelope(caves_ppp, fun=pcfinhom, nsim = 999, divisor="d", correction = "iso")
+
+
+# First order all caves
+
+#create simulated patterns based on first order for all caves
+c_1 <- envelope(fitc, fun = pcfinhom, nsim = 999, correction="iso", divisor = "d", savepatterns=TRUE)
+
+#create envelope for hominin caves based on all caves first order fit
+simfitc <- envelope(hom_caves, fun = pcfinhom, nsim = 999, correction="iso", divisor = "d", 
+                    simulate=c_1)
+
+# First order macro caves
+m_1 <- envelope(fitm, fun=pcfinhom, nsim = 999,correction="iso", divisor="d", savepatterns=TRUE)
+
+simfitm <- envelope(macro_caves, fun=pcfinhom, nsim = 999,
+                    correction="iso", divisor="d", simulate=m_1)
+
+# First order hominin caves
+
+simfith <- envelope(fith, fun = pcfinhom, nsim = 999, correction="iso", divisor = "d")
+```
+
+## Model plots
+
+### Predictions maps based on models
+
+Create raster based on model fit
+
+```{r}
+logodds_caves <- raster(-15.05964000  +(vars[[1]]*0.00098243)+(vars[[2]]*0.07562973)+(vars[[3]]*0.20667870)+(vars[[4]]*-0.00022537)+(vars[[5]]*0.00007790)+(vars[[6]]*-0.00017696 +(vars[[7]]*-0.00002233)), 
+                      crs=rsa_grid)
+
+logodds_mac <- raster(-7.51372290 +(vars[[1]]*-0.00550579)+ (vars[[2]]*0.01377018)+(vars[[3]]*0.31368157)+(vars[[4]]*-0.00027172)+(vars[[5]]*0.00036743)+ (vars[[6]]*-0.00007227)+ (vars[[7]]*0.00012990), crs=rsa_grid)
+
+logodds_hom <- raster( -0.241866676 + (vars[[1]]*-0.010860565)+(vars[[3]]*0.095577452)+(vars[[4]]*-0.000438203)+(vars[[6]]*0.000522995)+(vars[[7]]*0.000285699),crs=rsa_grid)
+
+```
+
+### PCF inhomogenous based on models
+
+```{r}
+pdf("figs/coh_chp/fitted_models_with_macro.pdf", width =7, height =11)
+par(mfrow=c(3,3))
+
+par(mar=c(5.1,5.1,5.1,2.1))
+plot(null, legend=FALSE, main="Null", lwd=1.5)
+
+par(mar=c(5.1,5.1,5.1,2.1))
+plot(simfitc, legend=FALSE, main="First-order all caves", lwd=1.5)
+
+par(mar=c(5.1,5.1,5.1,2.1))
+plot(simfitm, legend=FALSE, main="First-order macro caves", lwd=1.5)
+
+par(mar=c(5.1,5.1,5.1,2.1))
+plot(simfith, legend=FALSE, main="First-order hominin caves",lwd=1.5)
+
+par(mar=c(2.1,3.1,2.1,2.1))
+plot(logodds_caves, main="Predicted intensity\nall caves", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+par(mar=c(2.1,3.1,2.1,2.1))
+plot(logodds_mac, main="Predicted intensity\nmacro caves", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+par(mar=c(2.1,3.1,2.1,2.1))
+plot(logodds_hom, main="Predicted intensity\nhominin caves", col=inferno(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE)
+
+dev.off()
+```
